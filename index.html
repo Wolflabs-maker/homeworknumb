@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>WOLFFY | Practice OS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=JetBrains+Mono:wght@400;700&family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        wolfGreen: '#1ed760',
+                        wolfBlack: '#0a0a0a',
+                        wolfGray: '#1f1f1f',
+                        wolfPanel: '#161616',
+                        wolfError: '#ff4b4b',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                        display: ['Montserrat', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'neon': '0 0 10px rgba(30, 215, 96, 0.3)',
+                        'neon-strong': '0 0 20px rgba(30, 215, 96, 0.5)',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { 
+            background-color: #050505; 
+            color: #e0e0e0; 
+            -webkit-tap-highlight-color: transparent;
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Wolffy OS Identity */
+        .os-panel {
+            background: #121212;
+            border: 1px solid #333;
+            border-radius: 8px; /* Less rounded, more tech */
+        }
+
+        .os-btn {
+            background: #1f1f1f;
+            border: 1px solid #333;
+            border-radius: 6px;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.15s ease;
+        }
+        .os-btn:active {
+            transform: translateY(2px);
+            background: #2a2a2a;
+        }
+        .os-btn.selected {
+            background: rgba(30, 215, 96, 0.15);
+            border-color: #1ed760;
+            color: #1ed760;
+            box-shadow: 0 0 15px rgba(30, 215, 96, 0.1);
+        }
+
+        /* Wolf Labs Terminal Mode */
+        .terminal-input {
+            background: #000;
+            border: 1px solid #333;
+            font-family: 'JetBrains Mono', monospace;
+            color: #1ed760;
+            outline: none;
+        }
+        .terminal-input:focus {
+            border-color: #1ed760;
+            box-shadow: 0 0 10px rgba(30, 215, 96, 0.2);
+        }
+
+        /* Equalizer Progress Bar */
+        .eq-bar {
+            display: flex;
+            gap: 2px;
+            height: 100%;
+        }
+        .eq-segment {
+            flex: 1;
+            background: #333;
+            transition: background 0.3s;
+        }
+        .eq-segment.active {
+            background: #1ed760;
+            box-shadow: 0 0 5px #1ed760;
+        }
+
+        /* Feedback Sheet */
+        .feedback-sheet {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            z-index: 50;
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border-top: 1px solid #333;
+        }
+        .feedback-sheet.visible { transform: translateY(0); }
+        .feedback-sheet.correct { background: #0f1f15; border-top-color: #1ed760; }
+        .feedback-sheet.wrong { background: #1f0f0f; border-top-color: #ff4b4b; }
+
+        /* Animations */
+        @keyframes scanline {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100%); }
+        }
+        .labs-overlay {
+            position: relative;
+            overflow: hidden;
+        }
+        .labs-overlay::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, transparent, rgba(30, 215, 96, 0.1), transparent);
+            animation: scanline 2s linear infinite;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="h-screen flex justify-center bg-black">
+
+    <div class="w-full max-w-lg h-full flex flex-col relative bg-[#0a0a0a]">
+        
+        <!-- HEADER -->
+        <header class="p-4 border-b border-gray-900 bg-black/50 backdrop-blur-md z-10 flex flex-col gap-2">
+            <div class="flex items-center justify-between">
+                <button onclick="confirmExit()" class="text-gray-500 hover:text-white"><i class="fa-solid fa-xmark"></i> EXIT</button>
+                <div class="font-mono text-xs text-wolfGreen tracking-widest animate-pulse">WOLF_OS v2.0</div>
+                <div class="flex items-center gap-2 text-gray-400 font-mono text-xs">
+                    <i class="fa-solid fa-bolt text-yellow-500"></i> <span id="streak">0</span>
+                </div>
+            </div>
+            <!-- Equalizer Progress -->
+            <div class="h-2 w-full flex gap-1" id="progress-container">
+                <!-- JS will inject segments -->
+            </div>
+        </header>
+
+        <!-- MAIN AREA -->
+        <main id="game-area" class="flex-1 flex flex-col p-6 overflow-y-auto pb-32">
+            <!-- Dynamic Content -->
+        </main>
+
+        <!-- FOOTER CONTROLS -->
+        <footer class="p-6 bg-black border-t border-gray-900 absolute bottom-0 w-full z-20">
+            <button id="check-btn" onclick="checkAnswer()" class="w-full bg-gray-800 text-gray-500 font-bold uppercase tracking-widest py-4 rounded text-sm transition-all pointer-events-none border border-gray-700">
+                Execute Protocol
+            </button>
+        </footer>
+
+        <!-- FEEDBACK SHEET -->
+        <div id="feedback-overlay" class="feedback-sheet">
+            <div class="p-6 flex flex-col gap-4">
+                <div class="flex items-center gap-3">
+                    <div id="feedback-icon" class="w-8 h-8 flex items-center justify-center font-bold border">
+                        <!-- Icon injected -->
+                    </div>
+                    <h3 id="feedback-title" class="font-mono font-bold text-xl uppercase tracking-wider">Status</h3>
+                </div>
+                
+                <div class="pl-11">
+                    <p id="feedback-message" class="text-sm text-gray-300 mb-2">Message</p>
+                    <div id="correct-answer-box" class="hidden text-xs font-mono text-wolfGreen mt-2 p-2 bg-black/50 border border-wolfGreen/30 rounded">
+                        Correct: <span id="correct-text"></span>
+                    </div>
+                </div>
+
+                <button onclick="nextExercise()" class="w-full bg-white text-black font-black uppercase py-4 rounded mt-2 hover:bg-gray-200 transition-colors">
+                    Next Data Block
+                </button>
+            </div>
+        </div>
+
+        <!-- LABS INTERSTITIAL (HARD MODE) -->
+        <div id="labs-screen" class="absolute inset-0 bg-black z-40 hidden flex-col items-center justify-center text-center p-8 labs-overlay">
+            <i class="fa-solid fa-terminal text-6xl text-wolfGreen mb-6"></i>
+            <h1 class="font-mono font-bold text-3xl text-white mb-2">WOLF LABS</h1>
+            <p class="text-gray-500 font-mono text-sm mb-8">ENTERING TERMINAL MODE...<br>MANUAL INPUT REQUIRED</p>
+            <div class="w-16 h-16 border-4 border-t-wolfGreen border-r-wolfGreen border-b-gray-800 border-l-gray-800 rounded-full animate-spin"></div>
+        </div>
+
+        <!-- COMPLETION -->
+        <div id="completion-screen" class="absolute inset-0 bg-[#050505] z-50 hidden flex-col items-center justify-center text-center p-8">
+            <div class="w-32 h-32 border-2 border-wolfGreen rounded-full flex items-center justify-center mb-8 shadow-neon">
+                <i class="fa-solid fa-flag-checkered text-5xl text-wolfGreen"></i>
+            </div>
+            <h1 class="font-display font-black text-4xl text-white mb-2">SYSTEM<br>UPDATED</h1>
+            <p class="text-gray-400 mb-10 font-mono text-sm">Present Perfect Syntax: 100%</p>
+            
+            <div class="w-full bg-gray-900 border border-gray-800 p-6 rounded-lg mb-8">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-gray-500 text-xs uppercase">Accuracy</span>
+                    <span class="text-wolfGreen font-mono font-bold">100%</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-500 text-xs uppercase">XP Gained</span>
+                    <span class="text-yellow-500 font-mono font-bold">+350 XP</span>
+                </div>
+            </div>
+
+            <button onclick="location.reload()" class="w-full bg-wolfGreen text-black font-bold py-4 rounded uppercase tracking-widest hover:shadow-neon transition-shadow">
+                Restart Protocol
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        // --- 30 EXERCISES DATABASE ---
+        // Types: 'select' (Multiple Choice), 'arrange' (Word Bank), 'input' (Wolf Labs/Type)
+        const exercises = [
+            // AFFIRMATIVE (1-10)
+            { type: 'arrange', q: "I (become) numb.", a: "I have become numb", words: ["become", "I", "have", "numb", "am"] },
+            { type: 'select', q: "She _____ (change) a lot.", opts: ["has changed", "have changed", "changed"], correct: 0 },
+            { type: 'arrange', q: "We (take) the steps.", a: "We have taken the steps", words: ["taken", "We", "steps", "have", "the", "took"] },
+            { type: 'input', q: "They (write) the song.", a: "they have written the song", hint: "have + V3" }, // LABS
+            { type: 'select', q: "He _____ (be) tired.", opts: ["have been", "has been", "is been"], correct: 1 },
+            { type: 'arrange', q: "You (see) the truth.", a: "You have seen the truth", words: ["seen", "You", "truth", "have", "the"] },
+            { type: 'select', q: "It _____ (start).", opts: ["has started", "have started", "starts"], correct: 0 },
+            { type: 'arrange', q: "I (feel) the pressure.", a: "I have felt the pressure", words: ["felt", "I", "pressure", "have", "the"] },
+            { type: 'input', q: "We (break) the habit.", a: "we have broken the habit", hint: "have + broken" }, // LABS
+            { type: 'select', q: "She _____ (choose) a path.", opts: ["has chosen", "have chosen", "choosed"], correct: 0 },
+
+            // NEGATIVE (11-20)
+            { type: 'arrange', q: "I (not / see) you.", a: "I have not seen you", words: ["seen", "I", "not", "have", "you"] },
+            { type: 'select', q: "She _____ (not / go).", opts: ["hasn't gone", "haven't gone", "didn't gone"], correct: 0 },
+            { type: 'arrange', q: "We (not / take) it.", a: "We have not taken it", words: ["taken", "We", "not", "have", "it"] },
+            { type: 'input', q: "They (not / be) here.", a: "they haven't been here", hint: "haven't + V3" }, // LABS
+            { type: 'select', q: "He _____ (not / feel) well.", opts: ["hasn't felt", "haven't felt", "not felt"], correct: 0 },
+            { type: 'arrange', q: "You (not / change).", a: "You have not changed", words: ["changed", "You", "not", "have", "change"] },
+            { type: 'select', q: "It _____ (not / start) yet.", opts: ["hasn't started", "haven't started", "no started"], correct: 0 },
+            { type: 'arrange', q: "I (not / know).", a: "I have not known", words: ["known", "I", "not", "have", "knew"] },
+            { type: 'input', q: "We (not / choose).", a: "we haven't chosen", hint: "haven't + chosen" }, // LABS
+            { type: 'select', q: "She _____ (not / write).", opts: ["hasn't written", "haven't written", "hasn't wrote"], correct: 0 },
+
+            // INTERROGATIVE (21-30)
+            { type: 'arrange', q: "(You / be) there?", a: "Have you been there", words: ["been", "Have", "there", "you", "Has"] },
+            { type: 'select', q: "_____ (She / see) it?", opts: ["Has she seen", "Have she seen", "Has she saw"], correct: 0 },
+            { type: 'arrange', q: "(They / take) it?", a: "Have they taken it", words: ["taken", "Have", "it", "they", "Has"] },
+            { type: 'input', q: "(He / feel) pain?", a: "has he felt pain", hint: "Has + subj + V3" }, // LABS
+            { type: 'select', q: "_____ (It / change)?", opts: ["Has it changed", "Have it changed", "Did it change"], correct: 0 },
+            { type: 'arrange', q: "(We / know) him?", a: "Have we known him", words: ["known", "Have", "him", "we", "Has"] },
+            { type: 'select', q: "_____ (You / write)?", opts: ["Have you written", "Has you written", "Have you wrote"], correct: 0 },
+            { type: 'arrange', q: "(She / break) it?", a: "Has she broken it", words: ["broken", "Has", "it", "she", "Have"] },
+            { type: 'input', q: "(They / go) home?", a: "have they gone home", hint: "Have + gone" }, // LABS
+            { type: 'select', q: "(He / become) numb?", opts: ["Has he become", "Have he become", "Has he became"], correct: 0 }
+        ];
+
+        // --- STATE ---
+        let currentIdx = 0;
+        let streak = 0;
+        let userSelection = null;
+        let userArrangement = [];
+
+        // --- INIT ---
+        function init() {
+            // Build Progress Bar (Segments)
+            const pContainer = document.getElementById('progress-container');
+            exercises.forEach(() => {
+                const el = document.createElement('div');
+                el.className = 'eq-segment rounded-sm';
+                pContainer.appendChild(el);
+            });
+            renderExercise();
+        }
+
+        // --- RENDER ENGINE ---
+        function renderExercise() {
+            const area = document.getElementById('game-area');
+            const data = exercises[currentIdx];
+            const checkBtn = document.getElementById('check-btn');
+            
+            // Check for Lab Mode
+            if (data.type === 'input') {
+                showLabInterstitial(() => renderContent(area, data));
+            } else {
+                renderContent(area, data);
+            }
+
+            // Reset UI
+            document.getElementById('feedback-overlay').classList.remove('visible');
+            checkBtn.className = "w-full bg-gray-800 text-gray-500 font-bold uppercase tracking-widest py-4 rounded text-sm transition-all pointer-events-none border border-gray-700";
+            checkBtn.innerText = "EXECUTE PROTOCOL";
+            userSelection = null;
+            userArrangement = [];
+
+            // Update Progress Segments
+            const segments = document.querySelectorAll('.eq-segment');
+            segments.forEach((seg, idx) => {
+                if (idx < currentIdx) seg.classList.add('active');
+                else seg.classList.remove('active');
+            });
+        }
+
+        function showLabInterstitial(callback) {
+            const labScreen = document.getElementById('labs-screen');
+            labScreen.classList.remove('hidden');
+            labScreen.classList.add('flex');
+            
+            setTimeout(() => {
+                labScreen.classList.add('hidden');
+                labScreen.classList.remove('flex');
+                callback();
+            }, 2000);
+        }
+
+        function renderContent(container, data) {
+            container.innerHTML = '';
+            
+            // Header for Question
+            const typeLabel = data.type === 'input' ? 'WOLF LABS // TERMINAL' : 'STANDARD PROTOCOL';
+            const typeColor = data.type === 'input' ? 'text-wolfGreen' : 'text-gray-500';
+            
+            const header = document.createElement('div');
+            header.innerHTML = `
+                <div class="font-mono text-xs ${typeColor} mb-2 tracking-widest font-bold">${typeLabel}</div>
+                <h2 class="text-2xl font-display font-bold text-white mb-8">${data.q}</h2>
+            `;
+            container.appendChild(header);
+
+            // Render Modes
+            if (data.type === 'select') renderSelect(container, data);
+            else if (data.type === 'arrange') renderArrange(container, data);
+            else if (data.type === 'input') renderInput(container, data);
+        }
+
+        function renderSelect(container, data) {
+            const grid = document.createElement('div');
+            grid.className = "flex flex-col gap-3";
+            data.opts.forEach((opt, idx) => {
+                const btn = document.createElement('button');
+                btn.className = "os-btn w-full p-4 text-left text-gray-300 hover:bg-[#252525] flex items-center gap-4";
+                btn.innerHTML = `
+                    <div class="w-6 h-6 border border-gray-600 rounded flex items-center justify-center text-xs radio-box"></div>
+                    <span>${opt}</span>
+                `;
+                btn.onclick = () => {
+                    document.querySelectorAll('.os-btn').forEach(b => {
+                        b.classList.remove('selected');
+                        b.querySelector('.radio-box').innerHTML = '';
+                        b.querySelector('.radio-box').classList.remove('border-wolfGreen', 'bg-wolfGreen/20');
+                    });
+                    btn.classList.add('selected');
+                    btn.querySelector('.radio-box').innerHTML = '<i class="fa-solid fa-check"></i>';
+                    btn.querySelector('.radio-box').classList.add('border-wolfGreen', 'bg-wolfGreen/20');
+                    userSelection = idx;
+                    enableCheck();
+                };
+                grid.appendChild(btn);
+            });
+            container.appendChild(grid);
+        }
+
+        function renderArrange(container, data) {
+            const slotArea = document.createElement('div');
+            slotArea.id = "slot-area";
+            slotArea.className = "min-h-[60px] border-b-2 border-gray-800 mb-8 flex flex-wrap gap-2 p-2";
+            container.appendChild(slotArea);
+
+            const bankArea = document.createElement('div');
+            bankArea.className = "flex flex-wrap gap-3 justify-center";
+            
+            // Shuffle
+            const words = [...data.words].sort(() => Math.random() - 0.5);
+            words.forEach(word => {
+                const btn = document.createElement('button');
+                btn.className = "bg-[#1f1f1f] border border-gray-700 text-white font-mono px-4 py-2 rounded text-sm hover:border-gray-500 transition-all";
+                btn.innerText = word;
+                btn.onclick = () => {
+                    if(btn.parentElement === bankArea) {
+                        slotArea.appendChild(btn);
+                        btn.classList.add('border-wolfGreen', 'text-wolfGreen');
+                    } else {
+                        bankArea.appendChild(btn);
+                        btn.classList.remove('border-wolfGreen', 'text-wolfGreen');
+                    }
+                    userArrangement = Array.from(slotArea.children).map(c => c.innerText);
+                    userArrangement.length > 0 ? enableCheck() : disableCheck();
+                };
+                bankArea.appendChild(btn);
+            });
+            container.appendChild(bankArea);
+        }
+
+        function renderInput(container, data) {
+            const wrapper = document.createElement('div');
+            wrapper.className = "flex flex-col gap-2";
+            
+            const input = document.createElement('input');
+            input.type = "text";
+            input.className = "terminal-input w-full p-4 rounded text-lg placeholder-gray-800";
+            input.placeholder = "> TYPE_ANSWER_HERE...";
+            input.autocomplete = "off";
+            input.addEventListener('input', (e) => {
+                userSelection = e.target.value;
+                e.target.value.length > 3 ? enableCheck() : disableCheck();
+            });
+            
+            const hint = document.createElement('div');
+            hint.className = "text-xs font-mono text-gray-600 mt-2";
+            hint.innerText = `HINT: ${data.hint || 'No hint available'}`;
+
+            wrapper.appendChild(input);
+            wrapper.appendChild(hint);
+            container.appendChild(wrapper);
+        }
+
+        // --- LOGIC ---
+        function enableCheck() {
+            const btn = document.getElementById('check-btn');
+            btn.classList.remove('bg-gray-800', 'text-gray-500', 'pointer-events-none', 'border-gray-700');
+            btn.classList.add('bg-wolfGreen', 'text-black', 'pointer-events-auto', 'border-wolfGreen', 'shadow-neon');
+        }
+
+        function disableCheck() {
+            const btn = document.getElementById('check-btn');
+            btn.classList.add('bg-gray-800', 'text-gray-500', 'pointer-events-none', 'border-gray-700');
+            btn.classList.remove('bg-wolfGreen', 'text-black', 'pointer-events-auto', 'border-wolfGreen', 'shadow-neon');
+        }
+
+        function checkAnswer() {
+            const data = exercises[currentIdx];
+            let isCorrect = false;
+
+            if (data.type === 'select') {
+                isCorrect = userSelection === data.correct;
+            } else if (data.type === 'arrange') {
+                isCorrect = userArrangement.join(' ') === data.a;
+            } else if (data.type === 'input') {
+                // Remove punctuation and case for loose matching
+                const cleanInput = userSelection.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"").trim();
+                const cleanAnswer = data.a.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"").trim();
+                isCorrect = cleanInput === cleanAnswer;
+            }
+
+            showFeedback(isCorrect, data);
+        }
+
+        function showFeedback(isCorrect, data) {
+            const overlay = document.getElementById('feedback-overlay');
+            const icon = document.getElementById('feedback-icon');
+            const title = document.getElementById('feedback-title');
+            const msg = document.getElementById('feedback-message');
+            const btn = document.getElementById('check-btn');
+            const correctBox = document.getElementById('correct-answer-box');
+            const correctText = document.getElementById('correct-text');
+
+            btn.style.display = 'none'; // Hide check btn
+            overlay.classList.add('visible');
+
+            if(isCorrect) {
+                overlay.className = "feedback-sheet visible correct";
+                icon.className = "w-8 h-8 flex items-center justify-center font-bold border border-wolfGreen text-wolfGreen bg-wolfGreen/10 rounded-full";
+                icon.innerHTML = '<i class="fa-solid fa-check"></i>';
+                title.innerText = "SYSTEM ACCEPTED";
+                title.className = "font-mono font-bold text-xl uppercase tracking-wider text-wolfGreen";
+                msg.innerText = "Data integration successful.";
+                correctBox.classList.add('hidden');
+                streak++;
+                document.getElementById('streak').innerText = streak;
+            } else {
+                overlay.className = "feedback-sheet visible wrong";
+                icon.className = "w-8 h-8 flex items-center justify-center font-bold border border-wolfError text-wolfError bg-wolfError/10 rounded-full";
+                icon.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+                title.innerText = "SYNTAX ERROR";
+                title.className = "font-mono font-bold text-xl uppercase tracking-wider text-wolfError";
+                msg.innerText = "Input does not match protocol.";
+                
+                // Show Correct Answer
+                let answerText = "";
+                if(data.type === 'select') answerText = data.opts[data.correct];
+                else answerText = data.a;
+                
+                correctText.innerText = answerText;
+                correctBox.classList.remove('hidden');
+                
+                streak = 0;
+                document.getElementById('streak').innerText = streak;
+            }
+        }
+
+        function nextExercise() {
+            currentIdx++;
+            document.getElementById('check-btn').style.display = 'block';
+            disableCheck();
+            document.getElementById('feedback-overlay').classList.remove('visible');
+
+            if (currentIdx < exercises.length) {
+                renderExercise();
+            } else {
+                document.getElementById('completion-screen').classList.remove('hidden');
+                document.getElementById('completion-screen').classList.add('flex');
+            }
+        }
+
+        function confirmExit() {
+            if(confirm("TERMINATE SESSION? PROGRESS WILL BE LOST.")) {
+                location.reload();
+            }
+        }
+
+        window.onload = init;
+
+    </script>
+</body>
+</html>
